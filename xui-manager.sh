@@ -1,17 +1,18 @@
 #!/bin/bash
-# =============================
-# Deep Error Management x-ui Manager
-# Non-systemd, auto-install, auto-debug
-# =============================
+# ========================================
+# x-ui English Manager v1.0 (Non-systemd)
+# Fully patched, deep error handling
+# ========================================
 
-XUI_BIN_DIR="/usr/local/x-ui"
-BIN_DIR="$XUI_BIN_DIR/bin"
+XUI_DIR="/usr/local/x-ui-english"
+BIN_DIR="$XUI_DIR/bin"
 CONFIG_FILE="$BIN_DIR/config.json"
 LOG_FILE="/var/log/x-ui.log"
 PID_FILE="/var/run/x-ui.pid"
 CHECK_INTERVAL=10
 
 # ===== Functions =====
+
 install_dependencies() {
     echo "📦 Installing dependencies..."
     if command -v apt >/dev/null 2>&1; then
@@ -23,27 +24,40 @@ install_dependencies() {
 }
 
 cleanup_old_xui() {
-    echo "🗑 Cleaning old x-ui..."
-    pkill -f $XUI_BIN_DIR/x-ui 2>/dev/null
+    echo "🗑 Cleaning previous installation..."
+    pkill -f "$XUI_DIR/x-ui" 2>/dev/null
     rm -f "$PID_FILE"
-    rm -rf "$XUI_BIN_DIR"
+    rm -rf "$XUI_DIR"
 }
 
 download_xui() {
-    echo "🚀 Downloading x-ui..."
-    mkdir -p $XUI_BIN_DIR
+    echo "🚀 Downloading English x-ui..."
+    mkdir -p "$XUI_DIR"
     cd /tmp || exit
-    wget -O x-ui-install.sh https://raw.githubusercontent.com/sprov065/x-ui/master/install.sh
-    chmod +x x-ui-install.sh
-    bash x-ui-install.sh
+    git clone https://github.com/NidukaAkalanka/x-ui-english.git
+    cp -r x-ui-english/* "$XUI_DIR"
+}
+
+patch_xui_for_non_systemd() {
+    echo "🛠 Patching x-ui for non-systemd..."
+    cd "$XUI_DIR" || exit
+
+    # Backup original binary/script
+    [ -f x-ui.backup ] || cp x-ui x-ui.backup
+
+    # Remove systemd references
+    sed -i 's/systemctl start x-ui/nohup .\/x-ui \&/g' x-ui 2>/dev/null
+    sed -i 's/systemctl stop x-ui/kill $(cat \/var\/run\/x-ui.pid)/g' x-ui 2>/dev/null
+    sed -i 's/systemctl status x-ui/ps aux | grep x-ui/g' x-ui 2>/dev/null
 }
 
 setup_xray_config() {
+    echo "⚙️ Ensuring bin/config.json exists..."
     mkdir -p "$BIN_DIR"
     if [ ! -f "$CONFIG_FILE" ]; then
-        echo "⚠️ Missing config.json, creating default..."
         cat > "$CONFIG_FILE" <<EOF
 {
+  "language": "en",
   "inbounds": [],
   "outbounds": [
     {
@@ -60,52 +74,44 @@ EOF
 }
 
 start_xui() {
+    cd "$XUI_DIR" || exit
     if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
         return
     fi
-    nohup $XUI_BIN_DIR/x-ui > "$LOG_FILE" 2>&1 &
+    LANG=en_US.UTF-8 LANGUAGE=en_US LC_ALL=en_US.UTF-8 nohup ./x-ui > "$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
-    echo "🟢 x-ui started (PID $(cat "$PID_FILE"))"
+    echo "🟢 x-ui started (PID $(cat "$PID_FILE")) in English"
 }
 
 deep_error_analysis() {
-    echo "🔍 Deep log error analysis:"
+    echo "🔍 Deep log analysis..."
     recent_lines=$(tail -n 50 "$LOG_FILE")
-    
-    # Check for missing config
+
+    # Missing config.json
     if echo "$recent_lines" | grep -iq "config.json"; then
-        echo "⚠️ Detected missing config.json"
+        echo "⚠️ Missing config.json detected, recreating..."
         setup_xray_config
     fi
 
-    # Check for port in use
-    if echo "$recent_lines" | grep -iq "bind: address already in use"; then
-        echo "⚠️ Port conflict detected!"
-        conflicting_port=$(echo "$recent_lines" | grep -i "bind: address already in use" | grep -oE "[0-9]+")
-        echo "🔧 Killing process using port $conflicting_port"
-        pid=$(lsof -ti:$conflicting_port)
-        if [ ! -z "$pid" ]; then
-            kill -9 $pid
-            echo "✅ Process $pid killed"
-        fi
+    # Port conflicts
+    if echo "$recent_lines" | grep -iq "address already in use"; then
+        port=$(echo "$recent_lines" | grep -i "address already in use" | grep -oE "[0-9]+")
+        echo "⚠️ Port $port conflict! Killing conflicting process..."
+        pid=$(lsof -ti:$port)
+        [ ! -z "$pid" ] && kill -9 $pid && echo "✅ Killed process $pid"
     fi
 
-    # Check for permission errors
+    # Permissions
     if echo "$recent_lines" | grep -iq "permission denied"; then
-        echo "⚠️ Detected permission issues"
+        echo "⚠️ Permission issue detected, fixing..."
         chmod 600 "$CONFIG_FILE"
         chown root:root "$CONFIG_FILE"
-        echo "✅ Permissions fixed for config.json"
+        echo "✅ Permissions fixed"
     fi
 
-    # General ERROR/WARNING
+    # General errors
     errors=$(echo "$recent_lines" | grep -iE "error|failed|warning")
-    if [ ! -z "$errors" ]; then
-        echo "❌ Recent errors/warnings:"
-        echo "$errors"
-    else
-        echo "✅ No critical errors detected"
-    fi
+    [ ! -z "$errors" ] && echo -e "❌ Recent errors:\n$errors"
 }
 
 log_rotation() {
@@ -116,14 +122,19 @@ log_rotation() {
     fi
 }
 
-# ===== Main Loop =====
+# ===== Main =====
 install_dependencies
 cleanup_old_xui
 download_xui
+patch_xui_for_non_systemd
+setup_xray_config
 start_xui
 
-echo "✅ x-ui running. Logs: $LOG_FILE"
+echo "✅ English x-ui fully installed and patched for non-systemd"
+echo "Logs: $LOG_FILE"
+echo "PID: $(cat "$PID_FILE")"
 
+# ===== Continuous monitoring loop =====
 while true; do
     deep_error_analysis
     if [ ! -f "$PID_FILE" ] || ! kill -0 $(cat "$PID_FILE") 2>/dev/null; then
