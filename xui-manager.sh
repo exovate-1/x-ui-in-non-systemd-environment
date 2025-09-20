@@ -1,7 +1,7 @@
 #!/bin/bash
 # ========================================
-# x-ui English Manager v1.0 (Non-systemd)
-# Fully patched, deep error handling
+# x-ui English Manager v2.0 (Non-systemd)
+# Fully patched, deep error handling, wget download
 # ========================================
 
 XUI_DIR="/usr/local/x-ui-english"
@@ -17,9 +17,9 @@ install_dependencies() {
     echo "📦 Installing dependencies..."
     if command -v apt >/dev/null 2>&1; then
         sudo apt update
-        sudo apt install -y wget curl git unzip lsof
+        sudo apt install -y wget curl unzip lsof
     elif command -v yum >/dev/null 2>&1; then
-        sudo yum install -y wget curl git unzip lsof
+        sudo yum install -y wget curl unzip lsof
     fi
 }
 
@@ -34,8 +34,9 @@ download_xui() {
     echo "🚀 Downloading English x-ui..."
     mkdir -p "$XUI_DIR"
     cd /tmp || exit
-    git clone https://github.com/NidukaAkalanka/x-ui-english.git
-    cp -r x-ui-english/* "$XUI_DIR"
+    # Download tarball and extract
+    wget -qO- https://github.com/NidukaAkalanka/x-ui-english/archive/refs/heads/master.tar.gz | tar xz
+    cp -r x-ui-english-master/* "$XUI_DIR"
 }
 
 patch_xui_for_non_systemd() {
