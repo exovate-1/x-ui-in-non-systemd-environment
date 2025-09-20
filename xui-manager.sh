@@ -1,15 +1,17 @@
 #!/bin/bash
 # =============================
 # Robust x-ui Manager (Non-systemd)
-# - Fully self-contained
+# - Self-contained
 # - Cleans old installations
-# - Auto-install dependencies
+# - Auto-installs dependencies
 # - Auto-debug & auto-restart
-# - Runs x-ui directly without systemd
+# - Automatically sets up missing xray config
 # =============================
 
 # ===== CONFIG =====
 XUI_BIN_DIR="/usr/local/x-ui"
+BIN_DIR="$XUI_BIN_DIR/bin"
+CONFIG_FILE="$BIN_DIR/config.json"
 LOG_FILE="/var/log/x-ui.log"
 PID_FILE="/var/run/x-ui.pid"
 CHECK_INTERVAL=10  # seconds between auto-restart checks
@@ -48,6 +50,28 @@ install_xui() {
     bash x-ui-install.sh
 }
 
+setup_xray_config() {
+    echo "⚙️ Checking xray config..."
+    mkdir -p "$BIN_DIR"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "⚠️ Missing config.json, creating default..."
+        cat > "$CONFIG_FILE" <<EOF
+{
+  "inbounds": [],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}
+EOF
+        chmod 600 "$CONFIG_FILE"
+        chown root:root "$CONFIG_FILE"
+        echo "✅ Default config.json created"
+    fi
+}
+
 start_xui_direct() {
     echo "🟢 Starting x-ui directly (no systemd)..."
     if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
@@ -75,6 +99,8 @@ auto_debug() {
         echo "❌ x-ui binary missing, reinstalling..."
         install_xui
     fi
+
+    setup_xray_config
 
     if [ ! -f "$PID_FILE" ] || ! kill -0 $(cat $PID_FILE) 2>/dev/null; then
         echo "⚠️ x-ui not running, starting..."
